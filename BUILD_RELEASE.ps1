@@ -3,11 +3,14 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
+$version = "2.0.1"
+$versionSafe = $version.Replace(".", "_")
+
 python -m PyInstaller --clean "$root\EMS_Screen.spec"
 
 $releaseDir = Join-Path $root "release"
-$packageDir = Join-Path $releaseDir "EMS_Logger_v2.0_Windows"
-$zipPath = Join-Path $releaseDir "EMS_Logger_v2_0_Windows.zip"
+$packageDir = Join-Path $releaseDir "EMS_Logger_v$version`_Windows"
+$zipPath = Join-Path $releaseDir "EMS_Logger_v$versionSafe`_Windows.zip"
 
 if (Test-Path $packageDir) {
     Remove-Item -LiteralPath $packageDir -Recurse -Force

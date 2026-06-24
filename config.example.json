@@ -12,10 +12,11 @@
     "night_start": "20:00",
     "monitor": 1,
     "region": null,
-    "version": "2.0",
+    "version": "2.0.1",
     "timezone": "MSK",
     "window_geometry": "880x690",
     "disclaimer_shown": false,
     "update_repo": "ZICteam/EMS-Logger"
 }
+
 

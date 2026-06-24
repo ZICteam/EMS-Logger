@@ -20,7 +20,7 @@ from PIL import Image, ImageTk
 from datetime import datetime, timedelta, timezone
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "2.0"
+APP_VERSION = "2.0.1"
 GITHUB_REPOSITORY = "ZICteam/EMS-Logger"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases/latest"
 GITHUB_API_LATEST_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -574,8 +574,9 @@ def save_screenshot(img, folder_name):
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         print(f"[INFO] Попытка сохранить скриншот: {full_path}")
         print(f"[DEBUG] Размер изображения: {img.shape}")
-        success = cv2.imwrite(full_path, img)
+        success, encoded = cv2.imencode(".png", img)
         if success:
+            encoded.tofile(full_path)
             print(f"[✅] Скриншот сохранён: {full_path}")
         else:
             print(f"[❌] Не удалось сохранить скриншот: {full_path}")
