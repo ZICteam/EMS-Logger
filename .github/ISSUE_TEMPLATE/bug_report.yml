@@ -1,0 +1,73 @@
+name: Bug report
+description: Сообщить об ошибке EMS Logger
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за баг-репорт. Чем точнее описание, тем быстрее проблему можно воспроизвести и исправить.
+
+  - type: input
+    id: version
+    attributes:
+      label: Версия EMS Logger
+      description: Например, v2.0
+      placeholder: v2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Что произошло?
+      description: Опишите ошибку и фактическое поведение.
+      placeholder: При выборе монитора область выбирается не там...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Как должно работать?
+      description: Опишите ожидаемое поведение.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги для повторения
+      description: Укажите точные действия.
+      placeholder: |
+        1. Открыть программу
+        2. Выбрать монитор 2
+        3. Нажать "Выбрать область"
+        4. ...
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Версия Windows
+      placeholder: Windows 10 / Windows 11
+
+  - type: textarea
+    id: monitors
+    attributes:
+      label: Мониторы
+      description: Укажите количество мониторов, разрешения и расположение, если проблема связана с экраном.
+      placeholder: Основной 1920x1080, второй слева 1280x1024
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Скриншоты или видео
+      description: Перетащите сюда скриншоты, если они помогают понять проблему.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Дополнительная информация
+      description: Логи, config.json без личных данных, любые детали окружения.

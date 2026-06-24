@@ -1,0 +1,32 @@
+name: Feature request
+description: Предложить улучшение EMS Logger
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какая задача или проблема?
+      description: Опишите, чего сейчас не хватает.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предложение
+      description: Как вы хотите, чтобы это работало?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Есть ли другой способ решить задачу?
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительный контекст
+      description: Скриншоты, примеры, ссылки.

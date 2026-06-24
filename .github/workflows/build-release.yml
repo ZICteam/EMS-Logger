@@ -1,0 +1,43 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build executable
+        run: python -m PyInstaller --clean EMS_Screen.spec
+
+      - name: Package release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release\EMS_Logger_Windows | Out-Null
+          Copy-Item dist\EMS_Screen.exe release\EMS_Logger_Windows\EMS_Screen.exe
+          Copy-Item README.md release\EMS_Logger_Windows\README.md
+          Copy-Item RELEASE_NOTES.md release\EMS_Logger_Windows\RELEASE_NOTES.md
+          Compress-Archive -Path release\EMS_Logger_Windows\* -DestinationPath release\EMS_Logger_Windows.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EMS_Logger_Windows
+          path: release/EMS_Logger_Windows.zip

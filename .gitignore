@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Build output
+build/
+dist/
+release/
+*.spec.bak
+
+# Runtime data
+config.json
+screenshots/
+*.log
+
+# Local downloads/backups
+vendor_downloads/
+Screen.zip
+*_backup_*.exe
+
+# OS / IDE
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
