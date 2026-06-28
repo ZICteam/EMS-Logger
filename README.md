@@ -1,4 +1,4 @@
-﻿# EMS Logger v2.0.1
+﻿# EMS Logger v2.0.2
 
 Темная Windows-утилита для EMS-логирования в Majestic RP: читает выбранную область экрана через OCR, находит заданные фразы-триггеры и сохраняет скриншоты по папкам с сортировкой по московскому времени.
 
@@ -21,7 +21,7 @@
 
 ## Быстрый старт
 
-1. Скачайте архив `EMS_Logger_v2_0_1_Windows.zip` из раздела Releases.
+1. Скачайте архив `EMS_Logger_v2_0_2_Windows.zip` из раздела Releases.
 2. Распакуйте архив в удобную папку.
 3. Запустите `EMS_Screen.exe`.
 4. Выберите монитор для распознавания.
@@ -87,6 +87,7 @@ RELEASE_NOTES.md    Текст для GitHub Release
 ## Пожертвования
 
 Поддержать проект можно здесь: [https://www.donationalerts.com/r/zic_team](https://www.donationalerts.com/r/zic_team)
+
 
 
 

@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
-$version = "2.0.1"
+$version = "2.0.2"
 $versionSafe = $version.Replace(".", "_")
 
 python -m PyInstaller --clean "$root\EMS_Screen.spec"
@@ -29,3 +29,4 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($packageDir, $zipPath)
 
 Write-Host "Release package created: $zipPath"
+

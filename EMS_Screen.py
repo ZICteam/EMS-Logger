@@ -20,7 +20,7 @@ from PIL import Image, ImageTk
 from datetime import datetime, timedelta, timezone
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 GITHUB_REPOSITORY = "ZICteam/EMS-Logger"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases/latest"
 GITHUB_API_LATEST_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -153,7 +153,8 @@ monitor_options = []
 monitor = None
 REGION = None
 running = False
-last_screenshot_time = 0
+last_screenshot_times = {}
+SCREENSHOT_COOLDOWN_SECONDS = 15
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -577,11 +578,20 @@ def save_screenshot(img, folder_name):
         success, encoded = cv2.imencode(".png", img)
         if success:
             encoded.tofile(full_path)
-            print(f"[✅] Скриншот сохранён: {full_path}")
-        else:
-            print(f"[❌] Не удалось сохранить скриншот: {full_path}")
+            if os.path.exists(full_path) and os.path.getsize(full_path) > 0:
+                print(f"[✅] Скриншот сохранён: {full_path}")
+                return True
+            print(f"[❌] Файл не появился после сохранения: {full_path}")
+            status_label.configure(text="Ошибка сохранения: файл не создан")
+            return False
+
+        print(f"[❌] Не удалось закодировать PNG: {full_path}")
+        status_label.configure(text="Ошибка сохранения: PNG не создан")
+        return False
     except Exception as e:
         print(f"[⛔️] Ошибка при сохранении скриншота: {e}")
+        status_label.configure(text=f"Ошибка сохранения: {e}")
+        return False
 
 
 def grab_fullscreen():
@@ -608,14 +618,20 @@ def update_ui(text):
         detected_text_label.configure(text=f"Обнаруженный текст: {text}", text_color="#22C55E")
 
 def main_loop():
-    global running, last_screenshot_time
+    global running, last_screenshot_times
     ensure_folders()
     update_monitor(MONITOR_INDEX)
-    last_screenshot_time = 0
+    last_screenshot_times = {}
 
     while running:
-        img = grab_fullscreen()
-        region_img = grab_region()
+        try:
+            img = grab_fullscreen()
+            region_img = grab_region()
+        except Exception as e:
+            status_label.configure(text=f"Ошибка захвата экрана: {e}")
+            print(f"[⛔️] Ошибка захвата экрана: {e}")
+            time.sleep(1)
+            continue
 
         gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -634,17 +650,23 @@ def main_loop():
 
         if text:
             print(f"[TEXT] Распознанный текст: '{text}'")
+            matched = False
             for trig, folder in config['triggers'].items():
                 if trig.lower().strip() in text.lower():
-                    time_since_last = time.time() - last_screenshot_time
-                    if time_since_last >= 15:
+                    matched = True
+                    now_time = time.time()
+                    time_since_last = now_time - last_screenshot_times.get(folder, 0)
+                    if time_since_last >= SCREENSHOT_COOLDOWN_SECONDS:
                         print(f"[TRIGGER] Сработал триггер: '{trig}' → сохраняем в '{folder}'")
-                        save_screenshot(img, folder)
-                        last_screenshot_time = time.time()
+                        if save_screenshot(img, folder):
+                            last_screenshot_times[folder] = now_time
+                            status_label.configure(text=f"Скриншот сохранён: {folder}")
                     else:
-                        remaining = 15 - time_since_last
+                        remaining = SCREENSHOT_COOLDOWN_SECONDS - time_since_last
                         print(f"[⏳] Триггер найден, но КД: подождите ещё {remaining:.1f} сек")
-                    break
+                        status_label.configure(text=f"{folder}: КД {remaining:.1f} сек")
+            if not matched:
+                print("[INFO] Текст есть, но триггеры не найдены")
         time.sleep(0.5)
 
 def start():
