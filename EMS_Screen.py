@@ -22,7 +22,7 @@ from PIL import Image, ImageTk
 from datetime import datetime, timedelta, timezone
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "2.0.3"
+APP_VERSION = "2.0.4"
 GITHUB_REPOSITORY = "ZICteam/EMS-Logger"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases/latest"
 GITHUB_API_LATEST_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -792,9 +792,18 @@ def fetch_latest_release():
     with urllib.request.urlopen(request, timeout=8) as response:
         data = json.loads(response.read().decode("utf-8"))
     latest_version = data.get("tag_name") or data.get("name") or ""
+    assets = data.get("assets") or []
+    download_url = data.get("html_url") or release_url
+    for asset in assets:
+        asset_name = asset.get("name", "")
+        if asset_name.lower().endswith(".zip"):
+            download_url = asset.get("browser_download_url") or download_url
+            break
     return {
         "version": latest_version.lstrip("vV"),
         "url": data.get("html_url") or release_url,
+        "download_url": download_url,
+        "notes": data.get("body") or "Описание изменений не указано.",
     }
 
 def check_for_updates(show_current=False):
@@ -804,9 +813,8 @@ def check_for_updates(show_current=False):
         try:
             release = fetch_latest_release()
             latest_version = release["version"]
-            release_url = release["url"]
             if latest_version and is_newer_version(latest_version, APP_VERSION):
-                app.after(0, lambda: show_update_available(latest_version, release_url))
+                app.after(0, lambda release=release: show_update_available(release))
             elif show_current:
                 app.after(0, lambda: status_label.configure(text="Установлена актуальная версия"))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as error:
@@ -816,11 +824,114 @@ def check_for_updates(show_current=False):
 
     threading.Thread(target=worker, daemon=True).start()
 
-def show_update_available(version, url):
+def compact_release_notes(notes, limit=1600):
+    notes = str(notes).replace("\r\n", "\n").strip()
+    if len(notes) <= limit:
+        return notes
+    return notes[:limit].rstrip() + "\n\n..."
+
+def show_update_popup(release):
+    version = release["version"]
+    notes = compact_release_notes(release.get("notes", ""))
+    download_url = release.get("download_url") or release.get("url")
+    release_url = release.get("url") or download_url
+
+    dialog = ctk.CTkToplevel(app)
+    dialog.title(f"Доступна EMS Logger v{version}")
+    dialog.configure(fg_color="#0B1220")
+    dialog.geometry("620x520")
+    dialog.minsize(560, 420)
+    dialog.transient(app)
+    dialog.grab_set()
+
+    card = ctk.CTkFrame(dialog, fg_color="#111C2F", border_color="#20304A", border_width=1, corner_radius=16)
+    card.pack(fill="both", expand=True, padx=18, pady=18)
+
+    ctk.CTkLabel(
+        card,
+        text=f"Доступна новая версия v{version}",
+        font=ctk.CTkFont(size=22, weight="bold"),
+        text_color="#F8FAFC",
+    ).pack(anchor="w", padx=20, pady=(18, 6))
+    ctk.CTkLabel(
+        card,
+        text=f"Установлена версия v{APP_VERSION}. Что нового:",
+        font=ctk.CTkFont(size=14),
+        text_color="#AAB4C0",
+    ).pack(anchor="w", padx=20, pady=(0, 12))
+
+    notes_box = ctk.CTkTextbox(
+        card,
+        height=300,
+        fg_color="#0F172A",
+        border_color="#243652",
+        border_width=1,
+        text_color="#DDE6F3",
+        font=ctk.CTkFont(size=13),
+        wrap="word",
+    )
+    notes_box.pack(fill="both", expand=True, padx=20, pady=(0, 16))
+    notes_box.insert("1.0", notes)
+    notes_box.configure(state="disabled")
+
+    buttons = ctk.CTkFrame(card, fg_color="transparent")
+    buttons.pack(fill="x", padx=20, pady=(0, 18))
+
+    def open_download():
+        webbrowser.open(download_url)
+        dialog.destroy()
+
+    ctk.CTkButton(
+        buttons,
+        text="Скачать обновление",
+        command=open_download,
+        height=38,
+        font=ctk.CTkFont(size=14, weight="bold"),
+        fg_color="#2563EB",
+        hover_color="#1D4ED8",
+        corner_radius=9,
+    ).pack(side="left", fill="x", expand=True, padx=(0, 8))
+    ctk.CTkButton(
+        buttons,
+        text="Открыть релиз",
+        command=lambda: webbrowser.open(release_url),
+        height=38,
+        font=ctk.CTkFont(size=14),
+        fg_color="#151F31",
+        hover_color="#1E293B",
+        border_color="#2A3B58",
+        border_width=1,
+        corner_radius=9,
+    ).pack(side="left", fill="x", expand=True, padx=8)
+    ctk.CTkButton(
+        buttons,
+        text="Позже",
+        command=dialog.destroy,
+        height=38,
+        font=ctk.CTkFont(size=14),
+        fg_color="#151F31",
+        hover_color="#1E293B",
+        border_color="#2A3B58",
+        border_width=1,
+        corner_radius=9,
+    ).pack(side="left", fill="x", expand=True, padx=(8, 0))
+
+    dialog.update_idletasks()
+    x = app.winfo_x() + max(20, (app.winfo_width() - dialog.winfo_width()) // 2)
+    y = app.winfo_y() + max(20, (app.winfo_height() - dialog.winfo_height()) // 2)
+    dialog.geometry(f"+{x}+{y}")
+    dialog.lift()
+    dialog.focus_force()
+
+def show_update_available(release):
+    version = release["version"]
+    download_url = release.get("download_url") or release.get("url")
     status_label.configure(text=f"Доступна новая версия: {version}")
     update_notice_frame.pack(fill="x", pady=(0, 12), before=btn_frame)
     update_notice_label.configure(text=f"Доступно обновление EMS Logger v{version}")
-    update_notice_button.configure(command=lambda: webbrowser.open(url))
+    update_notice_button.configure(command=lambda: webbrowser.open(download_url))
+    log_info(f"Доступно обновление: version={version}; url={download_url}")
+    show_update_popup(release)
 
 # Монитор выбор
 def monitor_change(val):
