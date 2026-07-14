@@ -10,8 +10,10 @@ import json
 import webbrowser
 import ctypes
 import re
+import logging
 import urllib.error
 import urllib.request
+from logging.handlers import RotatingFileHandler
 import cv2
 import numpy as np
 import mss
@@ -20,7 +22,7 @@ from PIL import Image, ImageTk
 from datetime import datetime, timedelta, timezone
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "2.0.2"
+APP_VERSION = "2.0.3"
 GITHUB_REPOSITORY = "ZICteam/EMS-Logger"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases/latest"
 GITHUB_API_LATEST_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -34,6 +36,11 @@ DISCLAIMER_TEXT = (
     "используемые товарные знаки принадлежат их соответствующим владельцам "
     "и не связаны и не одобрены Take-Two, Rockstar North Interactive."
 )
+
+LOG_DIR_NAME = "logs"
+LOG_FILE_NAME = "ems_logger.log"
+LOG_MAX_BYTES = 1024 * 1024
+LOG_BACKUP_COUNT = 5
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -115,6 +122,55 @@ config = load_config()
 def app_path(*parts):
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(sys.argv[0])))
     return os.path.join(base, *parts)
+
+def writable_app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+class MoscowLogFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        created = datetime.fromtimestamp(record.created, MOSCOW_TZ)
+        if datefmt:
+            return created.strftime(datefmt)
+        return created.strftime("%Y-%m-%d %H:%M:%S")
+
+def setup_logging():
+    log_dir = os.path.join(writable_app_dir(), LOG_DIR_NAME)
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, LOG_FILE_NAME)
+    logger = logging.getLogger("ems_logger")
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+
+    formatter = MoscowLogFormatter(
+        "%(asctime)s.%(msecs)03d MSK | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=LOG_MAX_BYTES,
+        backupCount=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.propagate = False
+    return logger, log_path
+
+logger, LOG_FILE_PATH = setup_logging()
+
+def log_info(message):
+    logger.info(message)
+    print(f"[INFO] {message}")
+
+def log_warning(message):
+    logger.warning(message)
+    print(f"[WARN] {message}")
+
+def log_error(message, exc_info=False):
+    logger.error(message, exc_info=exc_info)
+    print(f"[ERROR] {message}")
 
 def find_tesseract():
     candidates = [
@@ -381,6 +437,7 @@ def update_monitor(index):
     REGION = get_saved_region() or get_default_region()
     update_region_label()
     update_monitor_label()
+    log_info(f"Монитор обновлён: index={MONITOR_INDEX}; monitor={monitor}; region={REGION}")
     return True
     return False
 
@@ -537,6 +594,7 @@ def select_region():
             "width": min(width, monitor_width - local_left),
             "height": min(height, monitor_height - local_top),
         })
+        log_info(f"Область сохранена пользователем: monitor={MONITOR_INDEX}; region={REGION}")
         status_label.configure(text="Область сохранена")
 
     def cancel(_event=None):
@@ -559,12 +617,14 @@ def reset_region():
         return
     if update_monitor(MONITOR_INDEX):
         save_region(get_default_region())
+        log_info(f"Область сброшена по умолчанию: monitor={MONITOR_INDEX}; region={REGION}")
         status_label.configure(text="Область по умолчанию сохранена")
 
 def ensure_folders():
     for folder in set(config['triggers'].values()):
         os.makedirs(os.path.join(config['save_path'], "day", folder), exist_ok=True)
         os.makedirs(os.path.join(config['save_path'], "night", folder), exist_ok=True)
+    log_info(f"Папки сохранения проверены: save_path={config['save_path']}")
 
 def save_screenshot(img, folder_name):
     timestamp = moscow_now().strftime("%Y%m%d_%H%M%S_MSK")
@@ -573,23 +633,22 @@ def save_screenshot(img, folder_name):
 
     try:
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        print(f"[INFO] Попытка сохранить скриншот: {full_path}")
-        print(f"[DEBUG] Размер изображения: {img.shape}")
+        log_info(f"Попытка сохранить скриншот: path={full_path}; image_shape={img.shape}")
         success, encoded = cv2.imencode(".png", img)
         if success:
             encoded.tofile(full_path)
             if os.path.exists(full_path) and os.path.getsize(full_path) > 0:
-                print(f"[✅] Скриншот сохранён: {full_path}")
+                log_info(f"Скриншот сохранён: path={full_path}; size={os.path.getsize(full_path)}")
                 return True
-            print(f"[❌] Файл не появился после сохранения: {full_path}")
+            log_error(f"Файл не появился после сохранения: path={full_path}")
             status_label.configure(text="Ошибка сохранения: файл не создан")
             return False
 
-        print(f"[❌] Не удалось закодировать PNG: {full_path}")
+        log_error(f"Не удалось закодировать PNG: path={full_path}")
         status_label.configure(text="Ошибка сохранения: PNG не создан")
         return False
     except Exception as e:
-        print(f"[⛔️] Ошибка при сохранении скриншота: {e}")
+        log_error(f"Ошибка при сохранении скриншота: path={full_path}; error={e}", exc_info=True)
         status_label.configure(text=f"Ошибка сохранения: {e}")
         return False
 
@@ -622,6 +681,12 @@ def main_loop():
     ensure_folders()
     update_monitor(MONITOR_INDEX)
     last_screenshot_times = {}
+    log_info(
+        "Бот запущен: "
+        f"version={APP_VERSION}; monitor={MONITOR_INDEX}; monitor_info={monitor}; "
+        f"region={REGION}; save_path={config['save_path']}; "
+        f"cooldown={SCREENSHOT_COOLDOWN_SECONDS}; triggers={config['triggers']}"
+    )
 
     while running:
         try:
@@ -629,7 +694,7 @@ def main_loop():
             region_img = grab_region()
         except Exception as e:
             status_label.configure(text=f"Ошибка захвата экрана: {e}")
-            print(f"[⛔️] Ошибка захвата экрана: {e}")
+            log_error(f"Ошибка захвата экрана: monitor={monitor}; region={REGION}; error={e}", exc_info=True)
             time.sleep(1)
             continue
 
@@ -640,16 +705,18 @@ def main_loop():
         except pytesseract.TesseractNotFoundError:
             update_ui("Tesseract not found")
             status_label.configure(text="Установите Tesseract OCR")
+            log_error(f"Tesseract не найден: configured_path={TESSERACT_PATH}")
             running = False
             break
         except pytesseract.TesseractError as e:
             update_ui(f"OCR error: {e}")
+            log_error(f"OCR error: {e}")
             time.sleep(1)
             continue
         update_ui(text)
 
         if text:
-            print(f"[TEXT] Распознанный текст: '{text}'")
+            log_info(f"OCR text: {text!r}")
             matched = False
             for trig, folder in config['triggers'].items():
                 if trig.lower().strip() in text.lower():
@@ -657,16 +724,16 @@ def main_loop():
                     now_time = time.time()
                     time_since_last = now_time - last_screenshot_times.get(folder, 0)
                     if time_since_last >= SCREENSHOT_COOLDOWN_SECONDS:
-                        print(f"[TRIGGER] Сработал триггер: '{trig}' → сохраняем в '{folder}'")
+                        log_info(f"Триггер найден: trigger={trig!r}; folder={folder!r}; cooldown_passed={time_since_last:.1f}")
                         if save_screenshot(img, folder):
                             last_screenshot_times[folder] = now_time
                             status_label.configure(text=f"Скриншот сохранён: {folder}")
                     else:
                         remaining = SCREENSHOT_COOLDOWN_SECONDS - time_since_last
-                        print(f"[⏳] Триггер найден, но КД: подождите ещё {remaining:.1f} сек")
+                        log_info(f"Скриншот пропущен из-за cooldown: trigger={trig!r}; folder={folder!r}; remaining={remaining:.1f}")
                         status_label.configure(text=f"{folder}: КД {remaining:.1f} сек")
             if not matched:
-                print("[INFO] Текст есть, но триггеры не найдены")
+                log_info(f"OCR text без совпадения с триггерами: {text!r}")
         time.sleep(0.5)
 
 def start():
@@ -674,16 +741,22 @@ def start():
     if not running:
         running = True
         status_label.configure(text="Бот работает, сортировка по МСК")
+        log_info("Нажата кнопка запуска")
         threading.Thread(target=main_loop, daemon=True).start()
 
 def stop():
     global running
     running = False
     status_label.configure(text="Остановлено")
+    log_info("Бот остановлен пользователем")
 
 def open_folder():
     os.makedirs(config['save_path'], exist_ok=True)
     os.startfile(config['save_path'])
+
+def open_logs_folder():
+    os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+    os.startfile(os.path.dirname(LOG_FILE_PATH))
 
 def open_donations():
     webbrowser.open(DONATION_URL)
@@ -725,6 +798,8 @@ def fetch_latest_release():
     }
 
 def check_for_updates(show_current=False):
+    if show_current:
+        log_info("Ручная проверка обновлений запущена")
     def worker():
         try:
             release = fetch_latest_release()
@@ -783,7 +858,7 @@ update_notice_button.pack(side="right", padx=10, pady=8)
 
 btn_frame = ctk.CTkFrame(workspace_frame, fg_color="transparent")
 btn_frame.pack(fill="x", pady=(0, 12))
-btn_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="actions")
+btn_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="actions")
 ctk.CTkButton(
     btn_frame,
     text="Запуск",
@@ -826,6 +901,20 @@ ctk.CTkButton(
 ).grid(row=0, column=2, sticky="ew", padx=8)
 ctk.CTkButton(
     btn_frame,
+    text="Логи",
+    image=ICONS["folder"],
+    compound="left",
+    command=open_logs_folder,
+    height=48,
+    font=ctk.CTkFont(size=13),
+    fg_color="#151F31",
+    hover_color="#1E293B",
+    border_color="#2A3B58",
+    border_width=1,
+    corner_radius=10,
+).grid(row=0, column=3, sticky="ew", padx=8)
+ctk.CTkButton(
+    btn_frame,
     text="Пожертвовать",
     command=open_donations,
     height=48,
@@ -835,7 +924,7 @@ ctk.CTkButton(
     border_color="#22C55E",
     border_width=1,
     corner_radius=10,
-).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+).grid(row=0, column=4, sticky="ew", padx=(8, 0))
 
 monitor_frame = ctk.CTkFrame(workspace_frame, fg_color="#151F31", border_color="#243652", border_width=1, corner_radius=12)
 monitor_frame.pack(fill="x", pady=(0, 12))

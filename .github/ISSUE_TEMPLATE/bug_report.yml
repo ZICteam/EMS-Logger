@@ -69,5 +69,5 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Дополнительная информация
-      description: Логи, config.json без личных данных, любые детали окружения.
+      label: Логи и дополнительная информация
+      description: Приложите `logs/ems_logger.log`, `config.json` без личных данных и любые детали окружения.
