@@ -22,7 +22,7 @@ from PIL import Image, ImageTk
 from datetime import datetime, timedelta, timezone
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "2.0.4"
+APP_VERSION = "2.0.5"
 GITHUB_REPOSITORY = "ZICteam/EMS-Logger"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases/latest"
 GITHUB_API_LATEST_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -676,6 +676,32 @@ def update_ui(text):
         ocr_state_icon_label.configure(image=ICONS["circle_check"], text="")
         detected_text_label.configure(text=f"Обнаруженный текст: {text}", text_color="#22C55E")
 
+def normalize_trigger_text(value):
+    value = str(value).lower().replace("ё", "е")
+    translation = str.maketrans({
+        "ы": "и",
+        "й": "и",
+        "0": "о",
+        "3": "з",
+        "4": "ч",
+        "6": "б",
+        "@": "а",
+    })
+    value = value.translate(translation)
+    return re.sub(r"[^a-zа-я0-9]+", "", value)
+
+def trigger_matches(trigger, text):
+    trigger = trigger.lower().strip()
+    text = text.lower()
+    if trigger and trigger in text:
+        return True, "exact"
+
+    normalized_trigger = normalize_trigger_text(trigger)
+    normalized_text = normalize_trigger_text(text)
+    if normalized_trigger and normalized_trigger in normalized_text:
+        return True, "normalized"
+    return False, "none"
+
 def main_loop():
     global running, last_screenshot_times
     ensure_folders()
@@ -719,18 +745,25 @@ def main_loop():
             log_info(f"OCR text: {text!r}")
             matched = False
             for trig, folder in config['triggers'].items():
-                if trig.lower().strip() in text.lower():
+                is_match, match_mode = trigger_matches(trig, text)
+                if is_match:
                     matched = True
                     now_time = time.time()
                     time_since_last = now_time - last_screenshot_times.get(folder, 0)
                     if time_since_last >= SCREENSHOT_COOLDOWN_SECONDS:
-                        log_info(f"Триггер найден: trigger={trig!r}; folder={folder!r}; cooldown_passed={time_since_last:.1f}")
+                        log_info(
+                            f"Триггер найден: trigger={trig!r}; folder={folder!r}; "
+                            f"match_mode={match_mode}; cooldown_passed={time_since_last:.1f}"
+                        )
                         if save_screenshot(img, folder):
                             last_screenshot_times[folder] = now_time
                             status_label.configure(text=f"Скриншот сохранён: {folder}")
                     else:
                         remaining = SCREENSHOT_COOLDOWN_SECONDS - time_since_last
-                        log_info(f"Скриншот пропущен из-за cooldown: trigger={trig!r}; folder={folder!r}; remaining={remaining:.1f}")
+                        log_info(
+                            f"Скриншот пропущен из-за cooldown: trigger={trig!r}; "
+                            f"folder={folder!r}; match_mode={match_mode}; remaining={remaining:.1f}"
+                        )
                         status_label.configure(text=f"{folder}: КД {remaining:.1f} сек")
             if not matched:
                 log_info(f"OCR text без совпадения с триггерами: {text!r}")
