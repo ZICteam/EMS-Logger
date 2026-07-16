@@ -22,7 +22,7 @@ from PIL import Image, ImageTk
 from datetime import datetime, timedelta, timezone
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "2.0.5"
+APP_VERSION = "2.0.6"
 GITHUB_REPOSITORY = "ZICteam/EMS-Logger"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases/latest"
 GITHUB_API_LATEST_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -83,7 +83,8 @@ def get_default_config():
             "реанимировали": "reanim",
             "завершили": "fire",
             "физ": "fiz",
-            "псих": "psih"
+            "псих": "psih",
+            "объявление": "ads"
         },
         "save_path": "screenshots",
         "day_start": "10:00",
@@ -108,6 +109,14 @@ def load_config():
         if key not in loaded:
             loaded[key] = value
             changed = True
+    if not isinstance(loaded.get("triggers"), dict):
+        loaded["triggers"] = defaults["triggers"]
+        changed = True
+    else:
+        for trigger, folder in defaults["triggers"].items():
+            if trigger not in loaded["triggers"]:
+                loaded["triggers"][trigger] = folder
+                changed = True
     if changed:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(loaded, f, indent=4, ensure_ascii=False)
@@ -681,6 +690,8 @@ def normalize_trigger_text(value):
     translation = str.maketrans({
         "ы": "и",
         "й": "и",
+        "ъ": "",
+        "ь": "",
         "0": "о",
         "3": "з",
         "4": "ч",
